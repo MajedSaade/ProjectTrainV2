@@ -1,0 +1,8 @@
+.git
+.gitignore
+README.md
+compose/
+scripts/
+jenkins_docker/
+__pycache__
+*.pyc

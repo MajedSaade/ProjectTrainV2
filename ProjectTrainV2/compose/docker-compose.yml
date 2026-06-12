@@ -1,0 +1,58 @@
+services:
+  datastore:
+    image: redis:7-alpine
+    container_name: telemetry-datastore
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    networks:
+      - telemetry_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  telemetry-app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: telemetry-app
+    depends_on:
+      datastore:
+        condition: service_healthy
+    environment:
+      REDIS_HOST: datastore
+      REDIS_PORT: "6379"
+      REDIS_DB: "0"
+      REDIS_PASSWORD: ""
+      REDIS_SOCKET_TIMEOUT: "2.0"
+      RUN_DURATION_SECONDS: "${RUN_DURATION_SECONDS:-10}"
+      ENABLE_CHAOS: "${ENABLE_CHAOS:-false}"
+      HEARTBEAT_PATH: "/tmp/app_heartbeat"
+    networks:
+      - telemetry_net
+    restart: "no"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import os, sys, time; p='/tmp/app_heartbeat'; sys.exit(0 if os.path.isfile(p) and (time.time() - os.path.getmtime(p)) < 15 else 1)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+networks:
+  telemetry_net:
+    name: telemetry_net
+    driver: bridge
+
+volumes:
+  redis_data:
+    name: telemetry_redis_data
